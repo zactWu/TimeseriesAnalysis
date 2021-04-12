@@ -20,8 +20,9 @@ data.index = df.date
 print("初始数据：", data)
 
 # 创建训练集与验证集
-train = data[:int(0.8 * (len(data)))]
-valid = data[int(0.8 * (len(data))):]
+nobs = 10
+train = data[:nobs]
+valid = data[nobs:]
 print("train:", train.shape)
 print("valid:", valid.shape)
 
@@ -96,5 +97,45 @@ print(train_diff)
 #                             maxlag=15, addconst=True, verbose=True))
 # print(grangercausalitytests(train_diff[['snow', 'pollution']],
 #                             maxlag=15, addconst=True, verbose=True))
-print(grangercausalitytests(train_diff[['rain', 'pollution']],
-                            maxlag=15))
+# print(grangercausalitytests(train_diff[['rain', 'pollution']],
+#                             maxlag=15, addconst=True, verbose=True))
+
+# 模型初始化
+model = VAR(endog=train_diff)
+res = model.select_order(15)
+res.summary()
+
+# 训练
+model_fit = model.fit(maxlags=3)
+model_fit.summary()
+
+# 选择lag order
+lag_order = model_fit.k_ar
+print("lag order为：",lag_order)
+
+input_data = train_diff.values[-lag_order:]
+print("预测数据为：",input_data)
+
+# 预测
+pred = model_fit.forecast(y=input_data, steps=nobs)
+pred = (pd.DataFrame(pred, index=valid.index,
+columns=valid.columns))
+print(pred)
+
+# 还原差分 de-differentiate
+forecast = pred.copy()
+columns =  train.columns
+for col in columns:
+    forecast[col] = train[col].iloc[-1] + forecast[col].cumsum()
+print(forecast)
+
+# 图像输出
+plt.figure(figsize=(12,5))
+plt.xlabel('date')
+
+ax1 = valid.pollution.plot(color='blue', grid = True, label = 'Actual pollution')
+ax2 = forecast.pollution.plot(color='red', grid = True, label = 'Predicted pollution')
+ax1.legend(loc=1)
+ax2.legend(loc=2)
+plt.show()
+
